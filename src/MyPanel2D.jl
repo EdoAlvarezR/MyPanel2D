@@ -23,7 +23,7 @@ include(joinpath(vtk_path, "src/VTKtools.jl"))
 vtk = VTKtools
 
 # ------------ HEADERS ---------------------------------------------------------
-for header_name in ["types", "panel", "solver", "misc"]
+for header_name in ["types", "panel", "solver", "misc", "blayer"]
   include("MyPanel2D_"*header_name*".jl")
 end
 

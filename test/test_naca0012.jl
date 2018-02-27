@@ -1,6 +1,3 @@
-include("../src/MyPanel2D.jl")
-p2d = MyPanel2D
-
 "Testing that calculation of inviscid flow (no dettachement) around a symmetric
 airfoil (NACA0012) with no angle of attack predicts zero circulation"
 function test_naca0012(; save_path=nothing, run_name="test_naca0012",

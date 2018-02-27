@@ -9,6 +9,9 @@
 =###############################################################################
 
 """
+  `sourcevortex2D_V(A, B, q, gamma, C; \\
+                      more_outputs=nothing, reg_radius=1e-13, smth=1e-6)`
+
 Velocity induced on point `C` by a dual source/vortex panel of ends `A`,`B`,
 constant source strength density `q`, and uniform vortex stength density
 `gamma`. The panel panel is expected to point from A to B such as to define the
@@ -17,10 +20,28 @@ with an implicit z-axis coming out of the page (i.e., if the tanget points from
 left to right, the normal will point upwards)
 <!-- NOTE: Defining  ẑ*  as coming out of the page implies that a clockwise
 circulation will have to be negative -->
+
+  **Arguments**
+  * `A::Array{Float64, 1}`      : Initial node of panel.
+  * `B::Array{Float64, 1}`      : End node of panel.
+  * `q::Float64`                : Source strength density.
+  * `gamma::Float64`            : Vortex strength density.
+  * `C::Array{Float64, 1}`      : Probe position.
+
+  **Optional Arguments**
+  * `more_outputs::AbstractArray`     : Give it an empty array an it will push
+                                          into the array the vectors t (tangent
+                                          of panel), n (normal of panel), Gs
+                                          (geometric source influence vector),
+                                          and Gv (geometric vortex influence
+                                          vector).
+  * `reg_radius::Float64`             : Regularizing radius of tip singularities.
+  * `smth::Float64`                   : Numerical smoothing radius.
 """
-function sourcevortex2D_V(A::Array{Float64, 1}, B::Array{Float64, 1},
-                              q::Float64, gamma::Float64, C::Array{Float64, 1};
-                              more_outputs=nothing, reg_radius=1e-13, smth=1e-6)
+function sourcevortex2D_V(A::Array{Real, 1}, B::Array{Real, 1},
+                              q::Real, gamma::Real, C::Array{Real, 1};
+                              more_outputs=nothing, reg_radius::Real=1e-13,
+                              smth::Real=1e-6)
   t = (B-A); t = t/norm(t);   # Tangent vector
   n = [-t[2], t[1]]           # Normal vector
 

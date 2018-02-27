@@ -1,6 +1,3 @@
-include("../src/MyPanel2D.jl")
-p2d = MyPanel2D
-
 
 "Testing that calculation of inviscid flow (no dettachement) around a cube
 predicts zero circulation"
