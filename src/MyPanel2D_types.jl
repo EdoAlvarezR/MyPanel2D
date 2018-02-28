@@ -38,12 +38,12 @@ circulation will have to be negative -->
   * `reg_radius::Float64`             : Regularizing radius of tip singularities.
   * `smth::Float64`                   : Numerical smoothing radius.
 """
-function sourcevortex2D_V(A::Array{Real, 1}, B::Array{Real, 1},
-                              q::Real, gamma::Real, C::Array{Real, 1};
+function sourcevortex2D_V(A::Array{T, 1} where {T<:Real},
+                          B::Array{T, 1} where {T<:Real},
+                          q::Real, gamma::Real, C::Array{T, 1} where {T<:Real};
                               more_outputs=nothing, reg_radius::Real=1e-13,
                               smth::Real=1e-6)
-  t = (B-A); t = t/norm(t);   # Tangent vector
-  n = [-t[2], t[1]]           # Normal vector
+  t, n = get_tn(A, B)    # Tangent and normal vectors
 
   # Distances
   r_j = (C-A)
@@ -101,4 +101,10 @@ function sourcevortex2D_V(A::Array{Real, 1}, B::Array{Real, 1},
   end
 
   return sourceV+vortexV
+end
+
+function get_tn(A::Array{T, 1} where {T<:Real}, B::Array{T, 1} where {T<:Real})
+  t = (B-A); t = t/norm(t);   # Tangent vector
+  n = [-t[2], t[1]]           # Normal vector
+  return t, n
 end

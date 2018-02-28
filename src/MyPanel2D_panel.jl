@@ -94,6 +94,12 @@ function get_panel(self::Body, i::Int64)
   return A, B, strengths, CP
 end
 
+"Returns tangent and normal vectors of the i-th panel"
+function get_tn(self::Body, i::Int64)
+  A, B, _, _ = get_panel(self, i)
+  return get_tn(A, B)
+end
+
 "Returns the velocity induced at `X` by this paneled body.
 NOTE: This velocity doesn't include the freestream, only induced"
 function Vind(self::Body, X; debug=false)

@@ -51,7 +51,6 @@ function test_blayer_head(; verbose=true, show_plots=false,
     grid(true, color="0.8", linestyle="--")
     title("Boundary layer growth")
 
-
     subplot(132)
     plot(sc_xs, sc_H, "-k", label=L"$H$ Schlichting")
     plot(xs_plot, [H[i] for i in is], "or", label=L"$H$ Head")

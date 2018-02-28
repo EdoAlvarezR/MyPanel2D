@@ -16,6 +16,8 @@ module MyPanel2D
 using PyPlot
 plt = PyPlot
 
+import NaNMath
+
 # ------------ FLOW MODULES ----------------------------------------------------
 # VTK geometry processing tools https://github.com/byuflowlab/VTKtools.jl
 vtk_path = "/home/user/Dropbox/FLOWResearch/FLOWCodes/VTKtools/"
