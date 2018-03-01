@@ -31,7 +31,9 @@ Returns `(theta, H, cf)`, with `theta` momentum thickness, `H` shape factor,
 `cf` friction coefficient at the wall.
 """
 function calc_blayer(body::Body, mu::Real, nu::Real; theta0::Any="blunt",
-                                  more_outputs=nothing, t::Real=0, debug=false)
+                      more_outputs=nothing, t::Real=0,
+                      show_plot::Bool=false, plot_title::String="Boundary layer",
+                      debug=false, verbose=false)
   if !body.solved
     error("Body's panels must be solved before calculating boundary layer."*
             "Call `solve()` before calling this function.")
@@ -50,23 +52,39 @@ function calc_blayer(body::Body, mu::Real, nu::Real; theta0::Any="blunt",
   up_points = CPs[stg_i:end]
   up_vels = vels[stg_i:end]
 
-  if more_outputs!=nothing
-    push!(more_outputs, stg_i)
-    push!(more_outputs, low_points)
-    push!(more_outputs, up_points)
+  if more_outputs!=nothing || show_plot
+    _more_outputs=[]
+  else
+    _more_outputs=nothing
+  end
+
+  if _more_outputs!=nothing
+    push!(_more_outputs, stg_i)
+    push!(_more_outputs, low_points)
+    push!(_more_outputs, up_points)
   end
 
   # Solves lower and upper surfaces separately
   low_theta, low_H, low_cf = calc_blayer(low_points, low_vels, mu, nu;
-                          theta0=theta0, debug=debug, more_outputs=more_outputs)
+                          theta0=theta0, debug=debug, more_outputs=_more_outputs)
   up_theta, up_H, up_cf = calc_blayer(up_points, up_vels, mu, nu;
-                          theta0=theta0, debug=debug, more_outputs=more_outputs)
+                          theta0=theta0, debug=debug, more_outputs=_more_outputs)
 
   # Put them back together
   theta = vcat(reverse(low_theta), up_theta[2:end])
   H = vcat(reverse(low_H), up_H[2:end])
   cf = vcat(reverse(low_cf), up_cf[2:end])
 
+  if show_plot
+    _plot_blayer(body, theta, H, _more_outputs;
+                              verbose=verbose, str_title=plot_title)
+  end
+
+  if more_outputs!=nothing
+    for elem in _more_outputs
+      push!(more_outputs, elem)
+    end
+  end
 
   return theta, H, cf
 end
@@ -108,23 +126,6 @@ function calc_blayer(points::Array{T, 1} where {T<:AbstractArray},
   th_lambda, th_theta, th_H, th_tau_w = thwaites(points, vels, mu, nu; theta0=theta0)
   th_cf = th_tau_w./(0.5*rho*vels.^2)
 
-  # Checks for flow separation
-  sep_i = nothing                       # Index of separation point
-  if NaNMath.minimum(th_lambda) <= -0.09
-
-    # Finds separation point
-    for i in 1:npoints
-      if th_lambda[i] <= -0.09
-        sep_i = i
-        break
-      end
-    end
-
-    warn("Flow separation detected at X=$(points[sep_i]) (lambda=$(th_lambda[sep_i]))."*
-          "No flow separation method is currently implement, calculations will"*
-          "proceed ignoring separation.")
-  end
-
   # Checks for transition (Michel's method)
   tran_i = nothing                      # Index of transition point
                                         # Distance between points
@@ -136,6 +137,7 @@ function calc_blayer(points::Array{T, 1} where {T<:AbstractArray},
   tran_crit = Retheta-tran_crit
 
   if NaNMath.maximum(tran_crit)>=0
+
     # Finds transition point
     for i in 1:npoints
       if tran_crit[i]>=0
@@ -143,21 +145,46 @@ function calc_blayer(points::Array{T, 1} where {T<:AbstractArray},
         break
       end
     end
+
   end
 
-  if tran_i!=nothing
+  # Puts together laminar and turbulent solutions
+  if tran_i!=nothing  # Case of turbulent transition
+    # H0 = th_H[tran_i]
+    H0 = 1.4  # Resets the shape factor to flat plate initial condition
     hd_theta, hd_H, hd_cf = head(points[tran_i:end], vels[tran_i:end], nu,
-                                th_theta[tran_i]; H0=th_H[tran_i], debug=debug)
+                                th_theta[tran_i]; H0=H0, debug=debug)
 
     theta = vcat(th_theta[1:tran_i-1], hd_theta)
     H = vcat(th_H[1:tran_i-1], hd_H)
     cf = vcat(th_cf[1:tran_i-1], hd_cf)
 
-  else
+  else # Case of fully laminar
     theta = th_theta
     H = th_H
     cf = th_cf
 
+  end
+
+
+  sep_i = nothing                       # Index of separation point
+  sep_crit = 3.518333702400003          # Separation criterium, lambda=-0.09
+  H_fl = [Float64(Hi) for Hi in H]      # Converts Real array to Float array
+                                        #  in order to use NaNMath package
+  # Checks for flow separation
+  if NaNMath.maximum(H_fl) >= sep_crit
+
+    # Finds separation point
+    for i in 1:npoints
+      if H[i] >= sep_crit
+        sep_i = i
+        break
+      end
+    end
+
+    warn("Flow separation detected at X=$(points[sep_i]) (H=$(H[sep_i]))."*
+          "No flow separation method is currently implement, calculations will"*
+          "proceed ignoring separation.")
   end
 
   if more_outputs!=nothing
@@ -356,6 +383,75 @@ function _H2H1(H)
   end
 end
 
+function _plot_blayer(body::Body, theta, H, more_outputs;
+                          verbose=false, str_title::String="Boundary layer")
+
+  stg_i, low_points, up_points = more_outputs[1:3]
+  low_sep_i, low_tran_i, low_th_lambda, low_tran_crit = more_outputs[4:7]
+  up_sep_i, up_tran_i, up_th_lambda, up_tran_crit = more_outputs[8:11]
+
+
+  # Plots geometry and boundary layer properties
+  CPs = [ get_panel(body, i)[4] for i in 1:body.n ] # Control points
+  theta_points = []                                 # Momentum thickness
+  deltastar_points = []                             # Displacement thickness
+  for i in 1:body.n
+    deltastar = H[i]*theta[i]
+    t, n = get_tn(body, i)
+    push!(theta_points, CPs[i] + 20*theta[i]*n)
+    push!(deltastar_points, CPs[i] + 20*deltastar*n)
+  end
+
+  fig = figure("blayer")
+  plot([p[1] for p in CPs], [p[2] for p in CPs], "-k", label="Body")
+  plot([p[1] for p in deltastar_points], [p[2] for p in deltastar_points],
+  "-.b", label=L"Displacement thickness $20\times\delta^*$")
+  plot([p[1] for p in theta_points], [p[2] for p in theta_points],
+  "--g", label=L"Momentum thickness $20\times\theta$")
+  plot([up_points[1][1]], [up_points[1][2]], "*r", label="Stagnation point")
+
+
+  if verbose; println("\tStagnation point X=$(round.(up_points[1],2))"); end;
+  if low_tran_i!=nothing
+    X = low_points[low_tran_i]
+    plot([X[1]], [X[2]], "oy")
+    if verbose
+      println("\tLower surface turbulent transition at"*
+      " X=$(round.(X,2)) (tran_crit=$(round(low_tran_crit[low_tran_i],1)))")
+    end
+  end
+  if up_tran_i!=nothing
+    X = up_points[up_tran_i]
+    plot([X[1]], [X[2]], "oy", label="Transition point")
+    if verbose
+      println("\tUpper surface turbulent transition at"*
+      " X=$(round.(X,2))  (tran_crit=$(round(up_tran_crit[up_tran_i],1)))")
+    end
+  end
+  if low_sep_i!=nothing
+    X = low_points[low_sep_i]
+    plot([X[1]], [X[2]], "dy")
+    if verbose
+      println("\tLower surface flow separation at"*
+      " X=$(round.(X,2)) (H=$(round(H[length(low_th_lambda)-low_sep_i],1)))")
+    end
+  end
+  if up_sep_i!=nothing
+    X = up_points[up_sep_i]
+    plot([X[1]], [X[2]], "dy", label="Separation point")
+    if verbose
+      println("\tUpper surface flow separation at"*
+      " X=$(round.(X,2)) (H=$(round(H[length(low_th_lambda)+up_sep_i-1],1)))")
+    end
+  end
+
+  xlabel("x")
+  ylabel("y")
+  y_lims = maximum([p[1] for p in CPs])/2
+  ylim([-y_lims, y_lims])
+  legend(loc="best")
+  title(str_title)
+end
 
 
 
