@@ -100,6 +100,39 @@ function get_tn(self::Body, i::Int64)
   return get_tn(A, B)
 end
 
+"Returns point of trailing edge"
+function get_TE(self::Body)
+  return self.nodes[1,:]
+end
+
+"Returns point of leading edge"
+function get_LE(self::Body)
+  TE = get_TE(self)   # Trailing edge
+  cmax = -Inf         # Maximum chord
+  cmax_i = nothing    # Point index of maximum chord
+
+  # Iterates over all points searching the point of maximum chord
+  for i in 1:self.n
+    this_c = norm(self.nodes[i, :] - TE)
+    if this_c >= cmax
+      cmax = this_c
+      cmax_i = i
+    end
+  end
+
+  if cmax_i==nothing
+    error("Logic error: No chord found!")
+  end
+
+  return self.nodes[cmax_i,:]
+end
+
+"Returns chord length"
+function get_c(self::Body)
+  xmax = maximum(self.nodes[:,1])
+  ymin = maximum(self.nodes[:,1])
+end
+
 "Returns the velocity induced at `X` by this paneled body.
 NOTE: This velocity doesn't include the freestream, only induced"
 function Vind(self::Body, X; debug=false)
@@ -132,14 +165,14 @@ function Vind(self::Body, X; debug=false)
 end
 
 "Returns the pressure coefficient at point X"
-function p_coeff(self::Body, X; t::Real=0)
-  this_Vinf = self.Vinf(X,t)
-  return 1 - ( norm( this_Vinf+Vind(self, X) ) / norm(this_Vinf) )^2
+function p_coeff(self::Body, X, magVinf::Real; t::Real=0)
+  this_Vinf = self.Vinf(X, t)
+  return 1 - ( norm( this_Vinf+Vind(self, X) ) / norm(magVinf) )^2
 end
 
 function save(self::Body, filename::String;
                               num=nothing, time=nothing, path="", comments="",
-                              t::Real=0)
+                              t::Real=0, magVinf="automatic")
 
   # Formats the body as a VTK
   points = [ vcat(self.nodes[i,:], 0) for i in 1:self.n+1 ]
@@ -158,9 +191,11 @@ function save(self::Body, filename::String;
             ]
 
     # Creates a pressure distribution data field
-    arr_p_field = [ p_coeff(self, CP; t=t) for CP in
+    _magVinf = magVinf=="automatic" ? norm(self.Vinf(zeros(2), 0)) : magVinf
+    arr_p_field = [ p_coeff(self, CP, _magVinf; t=t) for CP in
                                 [get_panel(self, i)[4] for i in 1:self.n]]
-    arr_p_field = vcat(arr_p_field, p_coeff(self, get_panel(self, self.n)[2]; t=t))
+    arr_p_field = vcat(arr_p_field, p_coeff(self,
+                                    get_panel(self, self.n)[2], _magVinf), t=t)
     p_field = Dict(
         "field_name" => "Cp",
         "field_type" => "scalar",
@@ -205,13 +240,14 @@ function save(self::Body, filename::String;
 end
 
 "Plots the pressure distribution along the body"
-function plot_P(self::Body; t::Real=0)
+function plot_P(self::Body; magVinf="automatic", t::Real=0)
   xs = []
   ys = []
+  _magVinf = magVinf=="automatic" ? norm(self.Vinf(zeros(0), 0)) : magVinf
   for i in 1:self.n
     _, _, _, CP = get_panel(self, i)
     push!(xs, CP[1])
-    push!(ys, p_coeff(self, CP; t=t))
+    push!(ys, p_coeff(self, CP, _magVinf; t=t))
   end
 
   fig = plt.figure("Cp")

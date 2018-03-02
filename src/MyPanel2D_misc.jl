@@ -53,3 +53,27 @@ function calc_Gamma(body::Body)
 
   return circ
 end
+
+"Calculates lift coefficient using Kutta-Joukowski theorem"
+function calc_liftKJ(body::Body, magVinf::Real; c="automatic")
+  _c = c=="automatic" ? get_c(body) : c
+  Gamma = calc_Gamma(body)
+  cl = -2*Gamma/(magVinf*_c)
+  return cl
+end
+
+"Integrates the pressure along the surface to obtain a force"
+function calc_pressureforce(body::Body, magVinf::Real; c="automatic", t::Real=0)
+  # Integrates the pressure
+  Cf = zeros(2)
+  for i in body.n
+    A, B, strengths, CP = get_panel(body, i)
+    p = p_coeff(body, CP, magVinf; t=t)
+    Cf += p*(B-A)
+  end
+
+  # Normalizes it by the chord length
+  Cf = Cf / (c=="automatic" ? get_c(body) : c)
+
+  return Cf
+end

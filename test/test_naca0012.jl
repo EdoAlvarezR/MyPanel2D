@@ -84,8 +84,8 @@ function test_naca0012(; save_path=nothing, run_name="test_naca0012",
   # Verification of Kutta condition on pressure
   _,_,_,CP1 = p2d.get_panel(body, 1)
   _,_,_,CPend = p2d.get_panel(body, body.n)
-  p1 = p2d.p_coeff(body, CP1)
-  pend = p2d.p_coeff(body, CPend)
+  p1 = p2d.p_coeff(body, CP1, magVinf)
+  pend = p2d.p_coeff(body, CPend, magVinf)
   kutta_test2 = abs(p1-pend)/abs(p1)<1e-6
   if verbose
     println("\n---------- KUTTA CONDITION TEST2 ------------------------")

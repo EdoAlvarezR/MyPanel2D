@@ -20,6 +20,8 @@ assumed throughout).
   * `body::Body`                            : Paneled body.
   * `mu::Float64`                           : Dynamic viscosity.
   * `nu::Float64`                           : Kinematic viscosity.
+  * `Vinf::Array{Float64, 1}`               : Freestream for nondimensionalizing
+                                               and direction of drag.
 
   **Optional Arguments**
   * `theta0::Any`       : Indicates initial condition at leading edge. Give it
@@ -27,11 +29,13 @@ assumed throughout).
                               or a number for manually setting the initial
                               condition.
 
-Returns `(theta, H, cf)`, with `theta` momentum thickness, `H` shape factor,
-`cf` friction coefficient at the wall.
+Returns `(theta, H, cf, CDs)`, with `theta` momentum thickness, `H` shape factor,
+`cf` friction coefficient at the wall, and `CDs=[CD, CDf, CDp]` total viscous,
+friction, and pressure drag.
 """
-function calc_blayer(body::Body, mu::Real, nu::Real; theta0::Any="blunt",
-                      more_outputs=nothing, t::Real=0,
+function calc_blayer(body::Body, mu::Real, nu::Real,
+                      Vinf::Array{T,1} where T<:Real;
+                      theta0::Any="blunt", more_outputs=nothing, t::Real=0,
                       show_plot::Bool=false, plot_title::String="Boundary layer",
                       debug=false, verbose=false)
   if !body.solved
@@ -39,6 +43,7 @@ function calc_blayer(body::Body, mu::Real, nu::Real; theta0::Any="blunt",
             "Call `solve()` before calling this function.")
   end
 
+  # --------- PREPARATION ------------------------------------------------------
   # Control points and velocities at each control point
   CPs = [ get_panel(body, i)[4] for i in 1:body.n ]
   vels = [ norm(Vind(body, CP) + body.Vinf(CP, t)) for CP in CPs ]
@@ -52,18 +57,19 @@ function calc_blayer(body::Body, mu::Real, nu::Real; theta0::Any="blunt",
   up_points = CPs[stg_i:end]
   up_vels = vels[stg_i:end]
 
+  # More outputs and parameters for plot
   if more_outputs!=nothing || show_plot
     _more_outputs=[]
   else
     _more_outputs=nothing
   end
-
   if _more_outputs!=nothing
     push!(_more_outputs, stg_i)
     push!(_more_outputs, low_points)
     push!(_more_outputs, up_points)
   end
 
+  # --------- SOLVES BOUNDARY LAYER --------------------------------------------
   # Solves lower and upper surfaces separately
   low_theta, low_H, low_cf = calc_blayer(low_points, low_vels, mu, nu;
                           theta0=theta0, debug=debug, more_outputs=_more_outputs)
@@ -75,18 +81,53 @@ function calc_blayer(body::Body, mu::Real, nu::Real; theta0::Any="blunt",
   H = vcat(reverse(low_H), up_H[2:end])
   cf = vcat(reverse(low_cf), up_cf[2:end])
 
+
+  # Checks for flow separation
+  low_sep_i = _more_outputs[4]        # Index of lower point of separation
+  up_sep_i = _more_outputs[8]         # Index of upper point of separation
+  low_sep_i = low_sep_i==nothing ? size(low_points,1) : low_sep_i
+  up_sep_i = up_sep_i==nothing ? size(up_points,1) : up_sep_i
+
+  # Calculates total viscous drag using Squire-Young's formula
+  magVinf = norm(Vinf)                # Freestream velocity
+  dirVinf = Vinf/magVinf              # Freestream direction
+  c = get_c(body)                     # Chord length
+  CD = 2*up_theta[up_sep_i]/c * (
+                            up_vels[up_sep_i]/magVinf)^( (up_H[up_sep_i]+5)/2 )
+  CD += 2*low_theta[low_sep_i]/c * (
+                        low_vels[low_sep_i]/magVinf)^( (low_H[low_sep_i]+5)/2 )
+  CD = CD*dirVinf
+
+  # Calculates friction drag
+  CDf = sum([(up_points[i]-up_points[i-1])*(up_cf[i]+up_cf[i-1])/2
+                                                for i in 2:up_sep_i])
+  CDf += sum([(low_points[i]-low_points[i-1])*(low_cf[i]+low_cf[i-1])/2
+                                                for i in 2:low_sep_i])
+  # (sanity check and gets rid of imaginary part)
+  if norm(imag.(CDf))/norm(real.(CDf))>1e-3
+    error("Sanity check on CDf failed! (Imaginary part is too large )"*
+          "CDf=$CDf")
+  end
+  CDf = real.(CDf)
+
+  # Calculates pressure drag
+  CDp = CD - dot(CDf,dirVinf)*dirVinf
+
+  # --------- EXTRA STUFF ------------------------------------------------------
+  # Plot
   if show_plot
     _plot_blayer(body, theta, H, _more_outputs;
                               verbose=verbose, str_title=plot_title)
   end
 
+  # More outputs
   if more_outputs!=nothing
     for elem in _more_outputs
       push!(more_outputs, elem)
     end
   end
 
-  return theta, H, cf
+  return theta, H, cf, [CD, CDf, CDp]
 end
 
 
@@ -408,7 +449,7 @@ function _plot_blayer(body::Body, theta, H, more_outputs;
   "-.b", label=L"Displacement thickness $20\times\delta^*$")
   plot([p[1] for p in theta_points], [p[2] for p in theta_points],
   "--g", label=L"Momentum thickness $20\times\theta$")
-  plot([up_points[1][1]], [up_points[1][2]], "*r", label="Stagnation point")
+  plot([up_points[1][1]], [up_points[1][2]], "*c", label="Stagnation point")
 
 
   if verbose; println("\tStagnation point X=$(round.(up_points[1],2))"); end;
@@ -430,7 +471,7 @@ function _plot_blayer(body::Body, theta, H, more_outputs;
   end
   if low_sep_i!=nothing
     X = low_points[low_sep_i]
-    plot([X[1]], [X[2]], "dy")
+    plot([X[1]], [X[2]], "dr")
     if verbose
       println("\tLower surface flow separation at"*
       " X=$(round.(X,2)) (H=$(round(H[length(low_th_lambda)-low_sep_i],1)))")
@@ -438,7 +479,7 @@ function _plot_blayer(body::Body, theta, H, more_outputs;
   end
   if up_sep_i!=nothing
     X = up_points[up_sep_i]
-    plot([X[1]], [X[2]], "dy", label="Separation point")
+    plot([X[1]], [X[2]], "dr", label="Separation point")
     if verbose
       println("\tUpper surface flow separation at"*
       " X=$(round.(X,2)) (H=$(round(H[length(low_th_lambda)+up_sep_i-1],1)))")
