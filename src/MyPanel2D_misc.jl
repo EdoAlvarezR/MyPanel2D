@@ -58,7 +58,7 @@ end
 function calc_liftKJ(body::Body, magVinf::Real; c="automatic")
   _c = c=="automatic" ? get_c(body) : c
   Gamma = calc_Gamma(body)
-  cl = -2*Gamma/(magVinf*_c)
+  cl = 2*Gamma/(magVinf*_c)
   return cl
 end
 
@@ -68,12 +68,37 @@ function calc_pressureforce(body::Body, magVinf::Real; c="automatic", t::Real=0)
   Cf = zeros(2)
   for i in body.n
     A, B, strengths, CP = get_panel(body, i)
+    _, n = get_tn(body, i)
     p = p_coeff(body, CP, magVinf; t=t)
-    Cf += p*(B-A)
+    Cf += -p*norm(B-A)*n
   end
 
   # Normalizes it by the chord length
   Cf = Cf / (c=="automatic" ? get_c(body) : c)
 
   return Cf
+end
+
+"Calculates the moment coefficient about the quarter chord by integrating the
+pressure distribution along the surface of the body"
+function calc_moment(body::Body, magVinf::Real; c="automatic", pos::Real=1/4,
+                                                                    t::Real=0)
+  # Defines the moment center of reference
+  LE = get_LE(body)
+  X0 = LE + pos*(get_TE(body)-LE)
+
+  # Integrates the pressure
+  Cm = 0
+  for i in 1:body.n
+    A, B, strengths, CP = get_panel(body, i)
+    _, n = get_tn(body, i)
+    p = p_coeff(body, CP, magVinf; t=t)   # Pressure
+    Cf = p*norm(B-A)*n                    # Force
+    l = CP-X0                             # Moment arm
+    Cm += cross(vcat(l, 0), vcat(Cf, 0))[3]     # Moment
+  end
+
+  Cm = Cm / (c=="automatic" ? get_c(body) : c)^2    # Normalizes by chord square
+
+  return Cm
 end

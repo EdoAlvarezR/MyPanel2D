@@ -85,8 +85,8 @@ function calc_blayer(body::Body, mu::Real, nu::Real,
   # Checks for flow separation
   low_sep_i = _more_outputs[4]        # Index of lower point of separation
   up_sep_i = _more_outputs[8]         # Index of upper point of separation
-  low_sep_i = low_sep_i==nothing ? size(low_points,1) : low_sep_i
-  up_sep_i = up_sep_i==nothing ? size(up_points,1) : up_sep_i
+  low_sep_i = low_sep_i==nothing ? size(low_points,1) : low_sep_i-1^(low_sep_i!=1)
+  up_sep_i = up_sep_i==nothing ? size(up_points,1) : up_sep_i-1^(up_sep_i!=1)
 
   # Calculates total viscous drag using Squire-Young's formula
   magVinf = norm(Vinf)                # Freestream velocity
@@ -98,15 +98,26 @@ function calc_blayer(body::Body, mu::Real, nu::Real,
                         low_vels[low_sep_i]/magVinf)^( (low_H[low_sep_i]+5)/2 )
   CD = CD*dirVinf
 
+  if debug
+    println("up_theta=$(up_theta[up_sep_i])")
+    println("low_theta=$(low_theta[low_sep_i])")
+    println("up_H=$(up_H[up_sep_i])")
+    println("low_H=$(low_H[low_sep_i])")
+    println("up_vel=$(up_vels[up_sep_i])")
+    println("low_vel=$(low_vels[low_sep_i])")
+    println("magVinf=$magVinf")
+  end
+
   # Calculates friction drag
   CDf = sum([(up_points[i]-up_points[i-1])*(up_cf[i]+up_cf[i-1])/2
                                                 for i in 2:up_sep_i])
   CDf += sum([(low_points[i]-low_points[i-1])*(low_cf[i]+low_cf[i-1])/2
                                                 for i in 2:low_sep_i])
   # (sanity check and gets rid of imaginary part)
-  if norm(imag.(CDf))/norm(real.(CDf))>1e-3
-    error("Sanity check on CDf failed! (Imaginary part is too large )"*
-          "CDf=$CDf")
+  check_crit = norm(imag.(CDf))/norm(real.(CDf))
+  if check_crit>1e-1
+    error("Sanity check on CDf failed! (Imaginary part is too large"*
+            ", crit=$check_crit) \n CDf=$CDf")
   end
   CDf = real.(CDf)
 
@@ -217,15 +228,15 @@ function calc_blayer(points::Array{T, 1} where {T<:AbstractArray},
 
     # Finds separation point
     for i in 1:npoints
-      if H[i] >= sep_crit
+      if H[i] >= sep_crit && pos_x[i]/pos_x[end]>0.20
         sep_i = i
+
+        warn("Flow separation detected at X=$(points[sep_i]) (H=$(H[sep_i]))."*
+              "No flow separation method is currently implement, calculations will"*
+              "proceed ignoring separation.")
         break
       end
     end
-
-    warn("Flow separation detected at X=$(points[sep_i]) (H=$(H[sep_i]))."*
-          "No flow separation method is currently implement, calculations will"*
-          "proceed ignoring separation.")
   end
 
   if more_outputs!=nothing
@@ -444,6 +455,9 @@ function _plot_blayer(body::Body, theta, H, more_outputs;
   end
 
   fig = figure("blayer")
+  y_lims = norm(CPs[stg_i]-CPs[1])/2
+  xlim([-y_lims/4, y_lims*2*9/8])
+  ylim([-y_lims, y_lims])
   plot([p[1] for p in CPs], [p[2] for p in CPs], "-k", label="Body")
   plot([p[1] for p in deltastar_points], [p[2] for p in deltastar_points],
   "-.b", label=L"Displacement thickness $20\times\delta^*$")
@@ -474,7 +488,7 @@ function _plot_blayer(body::Body, theta, H, more_outputs;
     plot([X[1]], [X[2]], "dr")
     if verbose
       println("\tLower surface flow separation at"*
-      " X=$(round.(X,2)) (H=$(round(H[length(low_th_lambda)-low_sep_i],1)))")
+      " X=$(round.(X,2)) (H=$(round(H[length(low_th_lambda)-low_sep_i+1],1)))")
     end
   end
   if up_sep_i!=nothing
@@ -488,8 +502,6 @@ function _plot_blayer(body::Body, theta, H, more_outputs;
 
   xlabel("x")
   ylabel("y")
-  y_lims = maximum([p[1] for p in CPs])/2
-  ylim([-y_lims, y_lims])
   legend(loc="best")
   title(str_title)
 end

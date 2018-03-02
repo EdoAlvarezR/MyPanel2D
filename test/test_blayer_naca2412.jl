@@ -51,10 +51,10 @@ function test_blayer_naca2412(; verbose=true, show_plots=false,
     low_sep_i, low_tran_i, low_th_lambda, low_tran_crit = more_outputs[4:7]
     up_sep_i, up_tran_i, up_th_lambda, up_tran_crit = more_outputs[8:11]
 
-    up_tran_i_f = stg_i+up_tran_i-1
-    low_tran_i_f = stg_i-(low_tran_i-1)
-    up_sep_i_f = stg_i+up_sep_i-1
-    low_sep_i_f = stg_i-(low_sep_i-1)
+    up_tran_i_f = up_tran_i!=nothing ? stg_i+up_tran_i-1 : nothing
+    low_tran_i_f = low_tran_i!=nothing ? stg_i-(low_tran_i-1) : nothing
+    up_sep_i_f = up_sep_i!=nothing ? stg_i+up_sep_i-1 : nothing
+    low_sep_i_f = low_sep_i!=nothing ? stg_i-(low_sep_i-1) : nothing
 
                                     # Distances between points
     low_ds = [norm(low_points[i]-low_points[i-1]) for i in 2:size(low_points,1)]
@@ -70,10 +70,10 @@ function test_blayer_naca2412(; verbose=true, show_plots=false,
     subplot(131)
     plot(up_s, deltastar[stg_i:end], "-b",
                                   label=L"$\delta^*$ upper surface")
-    plot(rev_low_s, deltastar[1:stg_i], "--b",
-                                  label=L"$\delta^*$ lower surface")
     plot(up_s, theta[stg_i:end], "-g",
                                   label=L"$\theta$ upper surface")
+    plot(rev_low_s, deltastar[1:stg_i], "--b",
+                                  label=L"$\delta^*$ lower surface")
     plot(rev_low_s, theta[1:stg_i], "--g",
                                   label=L"$\theta$ lower surface")
     if up_tran_i!=nothing
