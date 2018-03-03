@@ -7,3 +7,4 @@ documentation under `docs/MyPanel2D_documentation.ipynb`.
 Developed in Feb 2018 by Eduardo Alvarez.
 
 <img src="docs/vid/naca2412_00.gif" alt="Vid here" style="width: 500px;"/>
+<img src="docs/vid/naca2412wake2deg00.gif" alt="Vid here" style="width: 800px;"/>

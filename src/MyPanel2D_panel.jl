@@ -194,8 +194,8 @@ function save(self::Body, filename::String;
     _magVinf = magVinf=="automatic" ? norm(self.Vinf(zeros(2), 0)) : magVinf
     arr_p_field = [ p_coeff(self, CP, _magVinf; t=t) for CP in
                                 [get_panel(self, i)[4] for i in 1:self.n]]
-    arr_p_field = vcat(arr_p_field, p_coeff(self,
-                                    get_panel(self, self.n)[2], _magVinf), t=t)
+    arr_p_field = vcat(arr_p_field, p_coeff(self, get_panel(self, self.n)[2],
+                                                                _magVinf; t=t))
     p_field = Dict(
         "field_name" => "Cp",
         "field_type" => "scalar",
